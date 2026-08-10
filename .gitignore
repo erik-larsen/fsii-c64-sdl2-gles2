@@ -1,0 +1,10 @@
+.DS_Store
+build/
+web/*.js
+web/*.wasm
+web/*.data
+web/*.html.bak
+original-disks/
+original-docs/
+*.o
+fs2
