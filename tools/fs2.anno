@@ -1,0 +1,8 @@
+# Annotations for the fully-loaded FS2 DISK image (build/fs2-vice-mem.bin).
+# Addresses are disk-build addresses (differ slightly from the tape crack).
+# Format: ADDR name [comment]
+2285 irq_main raster-split IRQ (rewrites D018/D016 mid-frame)
+2700 nmi_main
+25EB vic_init standard bitmap mode, VIC bank 1, sprites on
+5F45 vic_mode_switch panel/3D display swap
+B520 reset_entry hardware RESET vector target
