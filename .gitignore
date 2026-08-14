@@ -8,3 +8,4 @@ original-disks/
 original-docs/
 *.o
 fs2
+web/*.html

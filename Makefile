@@ -19,8 +19,39 @@ GAME_D64 = $(DISKS)/Flight_Simulator_II_(Disk)_A_-_Game.d64
 
 TOOLS = $(BUILD)/t64x $(BUILD)/d64x $(BUILD)/dis6502 $(BUILD)/unpack
 
-.PHONY: all tools extract disasm vice-dump clean re
-all: tools
+# --- runtime -----------------------------------------------------------
+SDL_CFLAGS := $(shell sdl2-config --cflags)
+SDL_LIBS   := $(shell sdl2-config --libs)
+RT_SRC = src/main.c src/c64.c src/cpu6502.c src/snapshot.c src/gfx.c \
+         src/kbd.c
+
+.PHONY: all tools extract disasm vice-dump clean re fs2 fbtest web
+all: tools fs2
+
+fs2: $(BUILD)/fs2
+$(BUILD)/fs2: $(RT_SRC) src/c64.h src/cpu6502.h src/gfx.h src/kbd.h \
+              src/snapshot.h src/palette.h | $(BUILD)
+	$(CC) $(CFLAGS) $(SDL_CFLAGS) -o $@ $(RT_SRC) $(SDL_LIBS) \
+	    -framework OpenGL
+
+fbtest: $(BUILD)/fbtest
+$(BUILD)/fbtest: tools/fbtest.c src/c64.c src/cpu6502.c src/snapshot.c \
+                 src/c64.h src/palette.h | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ tools/fbtest.c src/c64.c src/cpu6502.c \
+	    src/snapshot.c
+
+# Emscripten web build.  The snapshot is preloaded from build/ into the
+# virtual FS; the resulting web/ output contains game data extracted
+# from your own disks - do not publish it.
+web: | $(BUILD)
+	emcc -std=gnu90 -O2 $(RT_SRC) \
+	    -s USE_SDL=2 -s FULL_ES2=1 -s WASM=1 \
+	    -s ALLOW_MEMORY_GROWTH=1 \
+	    --preload-file $(BUILD)/fs2-vice-mem.bin@fs2-snapshot.bin \
+	    --preload-file $(BUILD)/fs2-vice-mem.bin.ram@fs2-snapshot.bin.ram \
+	    --preload-file $(BUILD)/fs2-vice-mem.bin.regs@fs2-snapshot.bin.regs \
+	    -o web/fs2.html
+	@echo "web build: web/fs2.html (serve web/ over http)"
 
 # --- toolchain ---------------------------------------------------------
 tools: $(TOOLS)
