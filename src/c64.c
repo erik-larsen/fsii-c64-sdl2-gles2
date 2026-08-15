@@ -28,6 +28,18 @@ static void cia1_set_icr(struct c64 *m, unsigned char bits)
         m->cia1_icr_data |= 0x80;
 }
 
+/* recompute the VIC IRQ output level from flags & enables */
+static void vic_update_irq(struct c64 *m)
+{
+    if (m->vic[0x1A] & m->vic[0x19] & 0x0F) {
+        m->vic[0x19] |= 0x80;
+        m->irq_line |= 1;
+    } else {
+        m->vic[0x19] &= 0x7F;
+        m->irq_line &= ~1;
+    }
+}
+
 static unsigned char vic_read(struct c64 *m, unsigned reg)
 {
     switch (reg) {
@@ -48,14 +60,21 @@ static unsigned char vic_read(struct c64 *m, unsigned reg)
 
 static void vic_write(struct c64 *m, unsigned reg, unsigned char val)
 {
+    if (m->trace_lines &&
+        (reg == 0x11 || reg == 0x12 || reg == 0x16 || reg == 0x18 ||
+         reg == 0x19 || reg == 0x1A))
+        fprintf(stderr, "  [line %3d] D0%02X <- %02X\n",
+                m->raster, reg, val);
     if (reg == 0x19) {
-        /* acknowledge: writing 1s clears flags */
+        /* acknowledge: writing 1s clears flags; the IRQ line is level-
+           sensitive and must drop the moment the flag clears */
         m->vic[0x19] &= (unsigned char)~(val & 0x0F);
-        if (m->vic[0x19] & 0x0F)
-            m->vic[0x19] |= 0x80;
+        vic_update_irq(m);
         return;
     }
     m->vic[reg] = val;
+    if (reg == 0x1A)
+        vic_update_irq(m);
 }
 
 static unsigned char cia1_read(struct c64 *m, unsigned reg)
@@ -190,6 +209,7 @@ static unsigned char vfetch(const struct c64 *m, unsigned addr14)
 
 static void render_line(struct c64 *m, int line)
 {
+    static unsigned char p11, p16, p18, pdd;
     unsigned char d011 = m->vic[0x11];
     unsigned char d016 = m->vic[0x16];
     unsigned char d018 = m->vic[0x18];
@@ -205,6 +225,17 @@ static void render_line(struct c64 *m, int line)
     unsigned char *row = m->fb + (unsigned)y * C64_DISPLAY_W * 4;
     unsigned char bg = (unsigned char)(m->vic[0x21] & 0x0F);
     int cx, px;
+
+    if (m->trace_lines &&
+        (d011 != p11 || d016 != p16 || d018 != p18 ||
+         m->cia2_pra != pdd)) {
+        fprintf(stderr,
+            "line %3d: D011=%02X D016=%02X D018=%02X DD00=%02X "
+            "(irqline=%02X%s)\n",
+            line, d011, d016, d018, m->cia2_pra, m->vic[0x12],
+            (m->vic[0x11] & 0x80) ? "+256" : "");
+        p11 = d011; p16 = d016; p18 = d018; pdd = m->cia2_pra;
+    }
 
     if (y < 0 || y >= C64_DISPLAY_H)
         return;
@@ -381,12 +412,43 @@ void c64_key(struct c64 *m, int row, int col, int down)
         m->keymatrix[col] &= (unsigned char)~(1 << row);
 }
 
+void c64_add_hook(struct c64 *m, unsigned addr,
+                  void (*fn)(struct c64 *m), const char *name)
+{
+    if (m->nhooks >= (int)(sizeof m->hooks / sizeof m->hooks[0])) {
+        fprintf(stderr, "hook table full (%s)\n", name);
+        return;
+    }
+    m->hooks[m->nhooks].addr = addr & 0xFFFF;
+    m->hooks[m->nhooks].fn = fn;
+    m->hooks[m->nhooks].name = name;
+    m->hook_at[addr & 0xFFFF] = (unsigned char)(m->nhooks + 1);
+    m->nhooks++;
+}
+
+/* Run the hook, then emulate the RTS the original routine would do. */
+static void run_hook(struct c64 *m, int idx)
+{
+    unsigned lo, hi;
+    m->hooks[idx].fn(m);
+    m->cpu.sp = (m->cpu.sp + 1) & 0xFF;
+    lo = m->ram[0x100 | m->cpu.sp];
+    m->cpu.sp = (m->cpu.sp + 1) & 0xFF;
+    hi = m->ram[0x100 | m->cpu.sp];
+    m->cpu.pc = (((hi << 8) | lo) + 1) & 0xFFFF;
+    m->cpu.cycles += 20; /* nominal cost of the replaced routine */
+}
+
 static void step_line_cpu(struct c64 *m)
 {
     unsigned long target = m->cpu.cycles + C64_CYCLES_PER_LINE;
     while (m->cpu.cycles < target && !m->cpu.jam) {
         if (m->irq_line && !m->cpu.i)
             cpu6502_irq(&m->cpu);
+        if (m->hook_at[m->cpu.pc]) {
+            run_hook(m, m->hook_at[m->cpu.pc] - 1);
+            continue;
+        }
         cpu6502_step(&m->cpu);
     }
     /* CIA1 timer A */
@@ -413,16 +475,10 @@ void c64_run_frame(struct c64 *m)
         /* raster IRQ */
         {
             int cmp = m->vic[0x12] | ((m->vic[0x11] & 0x80) << 1);
-            if (line == cmp) {
+            if (line == cmp)
                 m->vic[0x19] |= 1;
-                if (m->vic[0x1A] & 1)
-                    m->vic[0x19] |= 0x80;
-            }
         }
-        if ((m->vic[0x19] & 0x80) && (m->vic[0x1A] & m->vic[0x19] & 0x0F))
-            m->irq_line |= 1;
-        else
-            m->irq_line &= ~1;
+        vic_update_irq(m);
 
         step_line_cpu(m);
         render_line(m, line);

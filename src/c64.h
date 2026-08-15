@@ -50,8 +50,25 @@ struct c64 {
     /* framebuffer: DISPLAY_W x DISPLAY_H RGBA */
     unsigned char fb[C64_DISPLAY_W * C64_DISPLAY_H * 4];
 
+    /*
+     * Routine-replacement hooks: when the PC reaches a hooked address,
+     * the C function runs instead of the 6502 routine and an RTS is
+     * emulated.  This is how ported routines take over from original
+     * code, one at a time.
+     */
+    struct c64_hook {
+        unsigned addr;
+        void (*fn)(struct c64 *m);
+        const char *name;
+    } hooks[32];
+    int nhooks;
+    unsigned char hook_at[65536]; /* 0 = none, else hook index + 1 */
+
     /* SID write log hook could go here later */
     unsigned long frame;
+
+    /* debug: when set, render_line prints VIC state changes per line */
+    int trace_lines;
 };
 
 void c64_init(struct c64 *m);
@@ -64,6 +81,10 @@ void c64_run_frame(struct c64 *m);
 
 /* keyboard: set/clear a matrix bit (row 0..7, col 0..7) */
 void c64_key(struct c64 *m, int row, int col, int down);
+
+/* Install a ported-routine hook at a 6502 address (see hooks above). */
+void c64_add_hook(struct c64 *m, unsigned addr,
+                  void (*fn)(struct c64 *m), const char *name);
 
 /* bus callbacks (exposed for the hook layer / tests) */
 unsigned char c64_read(void *ctx, unsigned addr);

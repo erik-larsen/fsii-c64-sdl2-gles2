@@ -23,7 +23,7 @@ TOOLS = $(BUILD)/t64x $(BUILD)/d64x $(BUILD)/dis6502 $(BUILD)/unpack
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS   := $(shell sdl2-config --libs)
 RT_SRC = src/main.c src/c64.c src/cpu6502.c src/snapshot.c src/gfx.c \
-         src/kbd.c
+         src/kbd.c src/diskio.c
 
 .PHONY: all tools extract disasm vice-dump clean re fs2 fbtest web
 all: tools fs2
@@ -50,6 +50,7 @@ web: | $(BUILD)
 	    --preload-file $(BUILD)/fs2-vice-mem.bin@fs2-snapshot.bin \
 	    --preload-file $(BUILD)/fs2-vice-mem.bin.ram@fs2-snapshot.bin.ram \
 	    --preload-file $(BUILD)/fs2-vice-mem.bin.regs@fs2-snapshot.bin.regs \
+	    --preload-file "$(GAME_D64)@fs2-disk.d64" \
 	    -o web/fs2.html
 	@echo "web build: web/fs2.html (serve web/ over http)"
 

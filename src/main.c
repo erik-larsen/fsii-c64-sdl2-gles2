@@ -21,6 +21,7 @@
 
 #include "c64.h"
 #include "snapshot.h"
+#include "diskio.h"
 #include "gfx.h"
 #include "kbd.h"
 
@@ -57,6 +58,11 @@ static void handle_events(void)
         case SDL_KEYUP:
             if (e.key.repeat)
                 break;
+#ifdef FS2_KEY_DEBUG
+            fprintf(stderr, "key %s scancode=%d\n",
+                    e.type == SDL_KEYDOWN ? "down" : "up",
+                    (int)e.key.keysym.scancode);
+#endif
             if (e.type == SDL_KEYDOWN &&
                 e.key.keysym.scancode == SDL_SCANCODE_F12) {
                 dump_shot(&machine);
@@ -89,17 +95,27 @@ static void main_iter(void)
 int main(int argc, char **argv)
 {
     const char *base = "build/fs2-vice-mem.bin";
+    const char *disk =
+        "original-disks/Flight_Simulator_II_(Disk)_A_-_Game.d64";
     int selftest = 0;
     int argi = 1;
 #ifdef __EMSCRIPTEN__
     base = "fs2-snapshot.bin"; /* preloaded into the virtual FS */
+    disk = "fs2-disk.d64";
 #endif
-    if (argi < argc && SDL_strcmp(argv[argi], "--selftest") == 0) {
-        selftest = 1;
-        argi++;
+    while (argi < argc) {
+        if (SDL_strcmp(argv[argi], "--selftest") == 0) {
+            selftest = 1;
+            argi++;
+        } else if (SDL_strcmp(argv[argi], "--disk") == 0 &&
+                   argi + 1 < argc) {
+            disk = argv[argi + 1];
+            argi += 2;
+        } else {
+            base = argv[argi];
+            argi++;
+        }
     }
-    if (argi < argc)
-        base = argv[argi];
 
     c64_init(&machine);
     if (snapshot_boot(&machine, base) != 0) {
@@ -109,6 +125,9 @@ int main(int argc, char **argv)
             "never distributed with this repository.)\n");
         return 1;
     }
+    if (diskio_init(&machine, disk) != 0)
+        fprintf(stderr, "running without disk (loader will hang on "
+                        "disk access)\n");
     if (gfx_init("Flight Simulator II", 960, 720) != 0)
         return 1;
 

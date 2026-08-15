@@ -40,6 +40,52 @@ out), 79.6% of RAM populated.  Live vectors read from it:
    runtime this is the seam where a C reimplementation services sector
    reads directly from the `.d64` instead of emulating drive-side code.
 
+## Stage-2 loader ($7300-$7AFF): fully decoded
+
+Jump table `$7300+`: `$78A2` cold-boot init/load, `$791E` system-error
+handler, `$7410` drive init (I0 + OPEN 2,#), `$7367` read 4-sector
+block, `$73B4` write 4-sector block (U2), `$7449` close, `$7457` format
+("N0:SUBLOGIC CORP.,FS").  The drive runs *stock* CBM DOS — commands are
+plain "U1:2 0 tt ss" strings; only the IEC serial protocol itself is
+custom code (`$76xx-$78xx` bit-banging `$DD00`, needed because the
+Kernal is banked out).
+
+Data flow of a block read (`$7367`): linear block index `$731C` -> BCD
+track/sector via per-track sector bitmap at `$7473` (3 bytes/track,
+MSB-first; excludes reserved sectors) computed in `$74DC`; ASCII into
+command template at `$7334` (`$7335` toggles U1/U2); send to ch 15;
+error channel read (`$75A1` into "00, OK,00,00" buffer at `$7579`);
+data received via `$7618` into memory at `$C2/$C3` (auto-increment,
+loaded from `$731E/$731F`, guarded below `$C000` when `$7327` set);
+4 sectors per call, cursor+pointer written back.
+
+Cold boot (`$78A2`) also runs a protection-flavored disk check
+(`$7848`): reads sector 0 of tracks from a table at `$7836` expecting
+specific error codes, accumulating mismatches into `$7326`.
+
+**C port seam (src/diskio.c)**: hooks replace the five channel
+primitives (`$7657`/`$765B` send, `$7618` receive, `$75DD` open,
+`$75FC` close) with a small CBM-DOS interpreter serving a .d64 image.
+All block math and loader logic still executes as original 6502 code.
+U2 writes go to the in-memory image only.
+
+`$7A00-$7AFF` holds the four multicolor panel sprites (pointers
+`$E8-$EB` in VIC bank 1).
+
+## Flight display: double-buffered raster split
+
+The `$2285` IRQ alternates two phases via `$4A`: phase B (raster 32,
+top border) sets multicolor + the 3D-window bitmap and latches raster
+163; phase A (163) sets hires bitmap `$4000` for the panel region and
+latches 32.  The phase-B `D018` immediate at `$22B0` is **self-modified
+by the game** (`$F0` <-> `$F8`) to page-flip the 3D view between
+bitmaps `$4000`/`$6000`.  Phase B also drives the panel updater
+(`$2418`/`$2505`) every few frames, acknowledging the IRQ only at the
+end — which is why the VIC IRQ line must be emulated level-sensitively:
+an ack must drop the line immediately, or the other phase re-enters
+right after RTI and the split collapses (the bug behind the striped 3D
+window; fixed in c64.c `vic_update_irq`).
+
 ## Disk display architecture (IRQ `$2285`)
 
 Raster-split IRQ: banks `$01=$35`, then rewrites `$D018` (screen/bitmap
