@@ -6,7 +6,7 @@ A faithful port of subLOGIC's *Flight Simulator II* (Commodore 64, 1984, Bruce A
 
 "Faithful" means the C source follows the original 6502 routines one by one: the same algorithms, data tables and screen output. It is not a remake. Enhancements such as higher-resolution rendering will come after the port is complete.
 
-**Status:** the game boots, runs and flies on both targets. Most logic still runs as original 6502 code inside a purpose-built C64 model, and routines are being replaced with C one at a time (see Implementation).
+**Status:** the game boots, runs and flies on both targets. Most logic still runs as original 6502 code inside a FSII-specific C64 emulator, and routines are being replaced with C one at a time (see Implementation).
 
 ## Build
 
