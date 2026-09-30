@@ -31,6 +31,12 @@ struct c64 {
     unsigned char ram[65536];
     unsigned char color_ram[1024]; /* $D800-$DBFF, low nibble used */
 
+    /* Character ROM as the VIC sees it: at $1000-$1FFF of VIC banks 0
+       and 2.  Loaded at runtime from the user's own files (not
+       distributed); without it those fetches read RAM. */
+    unsigned char chargen[4096];
+    int have_chargen;
+
     /* VIC-II registers ($D000-$D02E), stored raw. */
     unsigned char vic[0x40];
     int raster;                    /* current scanline 0..262 */
@@ -81,6 +87,9 @@ void c64_run_frame(struct c64 *m);
 
 /* keyboard: set/clear a matrix bit (row 0..7, col 0..7) */
 void c64_key(struct c64 *m, int row, int col, int down);
+
+/* Load a 4096-byte C64 character ROM image; returns 0 on success. */
+int c64_load_chargen(struct c64 *m, const char *path);
 
 /* Install a ported-routine hook at a 6502 address (see hooks above). */
 void c64_add_hook(struct c64 *m, unsigned addr,

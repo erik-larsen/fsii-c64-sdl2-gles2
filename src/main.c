@@ -5,14 +5,22 @@
  * code inside the C64 shim, presenting via SDL2 + OpenGLES2.  Runs on
  * macOS and, via Emscripten, on the web.
  *
- * Usage: fs2 [snapshot-base]
+ * Usage: fs2 [--selftest] [--disk name] [--disks dir] [snapshot-base]
  *   default snapshot-base: build/fs2-vice-mem.bin
+ *   default disk dir: original-disks (the game disk is inserted first)
  *
- * Keys: physical C64 layout mapping (see kbd.c); Esc = RUN/STOP,
- * F12 = dump framebuffer to fs2-shot.ppm.
+ * Keys: physical C64 layout mapping (see kbd.c); Esc = RUN/STOP.
+ * Host keys: F9/F10 = insert next/previous disk from the shelf (scenery
+ * disks, and a writable user disk for the mode library), F12 = dump
+ * framebuffer to fs2-shot.ppm.
+ *
+ * The character ROM (needed for the editor's text screens) is read from
+ * $FS2_CHARGEN or a local VICE install - never distributed.
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <SDL.h>
 
 #ifdef __EMSCRIPTEN__
@@ -22,11 +30,72 @@
 #include "c64.h"
 #include "snapshot.h"
 #include "diskio.h"
+#include "shelf.h"
 #include "gfx.h"
 #include "kbd.h"
 
 static struct c64 machine;
 static int running = 1;
+
+static const char *const chargen_paths[] = {
+    "roms/chargen",
+    "/usr/local/share/vice/C64/chargen-901225-01.bin",
+    "/opt/homebrew/share/vice/C64/chargen-901225-01.bin",
+    "/usr/share/vice/C64/chargen-901225-01.bin",
+    NULL
+};
+
+static void load_chargen(void)
+{
+    const char *env = getenv("FS2_CHARGEN");
+    int i;
+    if (env && c64_load_chargen(&machine, env) == 0)
+        return;
+    for (i = 0; chargen_paths[i]; i++)
+        if (c64_load_chargen(&machine, chargen_paths[i]) == 0)
+            return;
+    fprintf(stderr, "no C64 character ROM found (set FS2_CHARGEN); the "
+                    "editor's text screens will not render\n");
+}
+
+static void update_title(void)
+{
+    char title[128];
+    sprintf(title, "Flight Simulator II  -  drive 8: %.60s",
+            shelf_label());
+    gfx_set_title(title);
+    fprintf(stderr, "drive 8: %s\n", shelf_label());
+}
+
+#ifdef __EMSCRIPTEN__
+/* the user disk lives in IndexedDB so saves survive page reloads */
+static void persist_saves(const char *path)
+{
+    (void)path;
+    EM_ASM(FS.syncfs(false, function(err) {
+        if (err) console.log('saving user disk failed: ' + err);
+    }););
+}
+#endif
+
+static const char *userdisk_path(void)
+{
+    static char path[1024];
+#ifdef __EMSCRIPTEN__
+    EM_ASM(
+        FS.mkdir('/saves');
+        FS.mount(IDBFS, {}, '/saves');
+        FS.syncfs(true, function(err) {});
+    );
+    diskio_set_write_callback(persist_saves);
+    strcpy(path, "/saves/userdisk.d64");
+#else
+    char *pref = SDL_GetPrefPath("fsii-c64-sdl2-gles2", "fs2");
+    sprintf(path, "%.1000suserdisk.d64", pref ? pref : "./");
+    SDL_free(pref);
+#endif
+    return path;
+}
 
 static void dump_shot(const struct c64 *m)
 {
@@ -68,6 +137,15 @@ static void handle_events(void)
                 dump_shot(&machine);
                 break;
             }
+            if (e.key.keysym.scancode == SDL_SCANCODE_F9 ||
+                e.key.keysym.scancode == SDL_SCANCODE_F10) {
+                if (e.type == SDL_KEYDOWN) {
+                    shelf_step(e.key.keysym.scancode ==
+                               SDL_SCANCODE_F9 ? 1 : -1);
+                    update_title();
+                }
+                break;
+            }
             if (kbd_map(e.key.keysym.scancode, &row, &col))
                 c64_key(&machine, row, col, e.type == SDL_KEYDOWN);
             break;
@@ -95,13 +173,13 @@ static void main_iter(void)
 int main(int argc, char **argv)
 {
     const char *base = "build/fs2-vice-mem.bin";
-    const char *disk =
-        "original-disks/Flight_Simulator_II_(Disk)_A_-_Game.d64";
+    const char *disk = "A_-_Game.d64";
+    const char *diskdir = "original-disks";
     int selftest = 0;
     int argi = 1;
 #ifdef __EMSCRIPTEN__
     base = "fs2-snapshot.bin"; /* preloaded into the virtual FS */
-    disk = "fs2-disk.d64";
+    diskdir = "/disks";
 #endif
     while (argi < argc) {
         if (SDL_strcmp(argv[argi], "--selftest") == 0) {
@@ -110,6 +188,10 @@ int main(int argc, char **argv)
         } else if (SDL_strcmp(argv[argi], "--disk") == 0 &&
                    argi + 1 < argc) {
             disk = argv[argi + 1];
+            argi += 2;
+        } else if (SDL_strcmp(argv[argi], "--disks") == 0 &&
+                   argi + 1 < argc) {
+            diskdir = argv[argi + 1];
             argi += 2;
         } else {
             base = argv[argi];
@@ -125,11 +207,14 @@ int main(int argc, char **argv)
             "never distributed with this repository.)\n");
         return 1;
     }
+    load_chargen();
     diskio_init(&machine);
-    if (diskio_mount(disk, 0) != 0)
-        fprintf(stderr, "running with an empty drive\n");
     if (gfx_init("Flight Simulator II", 960, 720) != 0)
         return 1;
+    shelf_init(diskdir, userdisk_path());
+    if (shelf_insert_path(disk) != 0)
+        fprintf(stderr, "game disk %s not found; drive is empty\n", disk);
+    update_title();
 
     fprintf(stderr, "booted at PC=$%04X\n", machine.cpu.pc);
 

@@ -34,7 +34,16 @@ make web
 ./build/fs2
 ```
 
-At the prompts, press `A` (color display) and then `B` (regular flight mode). Keys follow the physical C64 layout: Esc is RUN/STOP and Left Alt is the Commodore key. F12 saves a screenshot. The subLOGIC reference card lists the flight controls.
+At the prompts, press `A` (color display) and then `B` (regular flight mode). Keys follow the physical C64 layout: Esc is RUN/STOP and Left Alt is the Commodore key. The subLOGIC reference card lists the flight controls, though v1.0 differs from it in places (see `docs/re-notes.md`).
+
+Host keys:
+
+- **F9 / F10** put the next or previous disk in the drive, cycling through the images in `original-disks/` and a writable **user disk**. The window title shows which disk is in. The original disks are write-protected, as the commercial ones were.
+- **F12** saves a screenshot.
+
+To save the mode library, open the editor with `E`, press F9/F10 until the user disk is in the drive, then press CTRL-Z. It formats that disk and saves, just as on a real C64. CTRL-X in the editor loads the library back. The user disk is kept in your per-user app-data folder, or in browser storage for the web build.
+
+The editor's text screens need the C64 character ROM, which isn't included. It's found automatically in a VICE install, or you can point `FS2_CHARGEN` at any 4 KB character ROM file.
 
 For the web build, serve `web/` over HTTP and open `fs2.html`. It contains data from your disks, so don't publish it.
 
@@ -47,12 +56,10 @@ For the web build, serve `web/` over HTTP and open `fs2.html`. It contains data 
 
 ## Plans
 
-1. Disk swapping for scenery disks, and a writable user disk for saving the mode library.
-2. Text-mode screens (the editor) using a character ROM from your own files.
-3. Mapping the in-flight code: 3D pipeline, flight model, instruments.
-4. Porting subsystems routine by routine until no 6502 code remains, then removing the interpreter.
-5. SID sound.
-6. After the faithful port: optional enhancements.
+1. Mapping the in-flight code: 3D pipeline, flight model, instruments.
+2. Porting subsystems routine by routine until no 6502 code remains, then removing the interpreter.
+3. SID sound.
+4. After the faithful port: optional enhancements.
 
 ## Credits
 

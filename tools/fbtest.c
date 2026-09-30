@@ -10,7 +10,9 @@
  *               out.ppm [row col press_at_frame]...
  * FS2_SWAP="frame:target,..." changes disks during the run; target is g
  * (the -d disk), u (the -u disk), e (eject) or a .d64 path (mounted
- * write-protected).
+ * write-protected).  FS2_POKE="frame:addr:len:val" fills RAM (hex addr
+ * and val) before that frame, e.g. to prove a load actually came from
+ * disk.
  * (repeat the row/col/frame triplet for multiple keys; each key is held
  * for FS2_KEY_HOLD frames, default 5, or per key as frame:hold.  Keep
  * command keys short - FS2 auto-repeats held keys - but hold CTRL
@@ -105,6 +107,9 @@ int main(int argc, char **argv)
     c64_init(m);
     if (snapshot_boot(m, argv[a]) != 0)
         return 1;
+    if (getenv("FS2_CHARGEN") &&
+        c64_load_chargen(m, getenv("FS2_CHARGEN")) != 0)
+        fprintf(stderr, "cannot load chargen %s\n", getenv("FS2_CHARGEN"));
     diskio_init(m);
     if (diskpath && diskio_mount(diskpath, 0) != 0)
         return 1;
@@ -121,6 +126,15 @@ int main(int argc, char **argv)
         }
         if (swaps)
             do_swaps(swaps, i, diskpath, userpath);
+        if (getenv("FS2_POKE")) {
+            int pf; unsigned pa, pl, pv;
+            if (sscanf(getenv("FS2_POKE"), "%d:%x:%u:%x", &pf, &pa, &pl,
+                       &pv) == 4 && pf == i) {
+                printf("frame %d: poke $%04X+%u = $%02X\n", i, pa, pl, pv);
+                memset(m->ram + (pa & 0xFFFF), (int)(pv & 0xFF),
+                       pa + pl <= 65536 ? pl : 65536 - pa);
+            }
+        }
         c64_run_frame(m);
         if (m->cpu.jam) {
             fprintf(stderr, "JAM at $%04X (frame %d)\n", m->cpu.pc, i);

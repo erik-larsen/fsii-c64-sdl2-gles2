@@ -11,6 +11,7 @@
 int gfx_init(const char *title, int winw, int winh);
 void gfx_present(const unsigned char *fb320x200rgba);
 void gfx_resize(int w, int h);
+void gfx_set_title(const char *title);
 void gfx_shutdown(void);
 
 #endif

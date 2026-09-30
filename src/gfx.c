@@ -140,7 +140,6 @@ void gfx_present(const unsigned char *fb)
     float want = 4.0f / 3.0f;
     float have = (float)view_w / (float)view_h;
     GLfloat verts[16];
-    int i;
 
     if (have > want)
         sx = want / have;
@@ -173,8 +172,12 @@ void gfx_present(const unsigned char *fb)
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     SDL_GL_SwapWindow(win);
-    for (i = 0; i < 1; i++) /* keep -Wall quiet about unused pattern */
-        ;
+}
+
+void gfx_set_title(const char *title)
+{
+    if (win)
+        SDL_SetWindowTitle(win, title);
 }
 
 void gfx_shutdown(void)

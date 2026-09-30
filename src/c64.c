@@ -201,10 +201,16 @@ static unsigned vic_base(const struct c64 *m)
     return ((unsigned)(~m->cia2_pra & 3)) << 14;
 }
 
-/* fetch a byte as the VIC sees it (no char ROM: FS2 uses bank 1) */
+/* fetch a byte as the VIC sees it: RAM, except the character ROM
+   shadow at $1000-$1FFF in banks 0 and 2 */
 static unsigned char vfetch(const struct c64 *m, unsigned addr14)
 {
-    return m->ram[(vic_base(m) + (addr14 & 0x3FFF)) & 0xFFFF];
+    unsigned base = vic_base(m);
+    addr14 &= 0x3FFF;
+    if (m->have_chargen && (base == 0x0000 || base == 0x8000) &&
+        addr14 >= 0x1000 && addr14 < 0x2000)
+        return m->chargen[addr14 - 0x1000];
+    return m->ram[(base + addr14) & 0xFFFF];
 }
 
 static void render_line(struct c64 *m, int line)
@@ -402,6 +408,20 @@ void c64_load_snapshot(struct c64 *m, const unsigned char *cpuview,
     /* RAM: raw bank if available (correct bytes under the I/O window),
        else the cpu view as an approximation */
     memcpy(m->ram, rawram ? rawram : cpuview, 65536);
+}
+
+int c64_load_chargen(struct c64 *m, const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    size_t n;
+    if (!f)
+        return -1;
+    n = fread(m->chargen, 1, sizeof m->chargen, f);
+    fclose(f);
+    if (n != sizeof m->chargen)
+        return -1;
+    m->have_chargen = 1;
+    return 0;
 }
 
 void c64_key(struct c64 *m, int row, int col, int down)

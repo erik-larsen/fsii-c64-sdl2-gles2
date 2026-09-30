@@ -9,3 +9,4 @@ original-docs/
 *.o
 fs2
 web/*.html
+roms/

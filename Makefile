@@ -23,14 +23,20 @@ TOOLS = $(BUILD)/t64x $(BUILD)/d64x $(BUILD)/dis6502 $(BUILD)/unpack
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS   := $(shell sdl2-config --libs)
 RT_SRC = src/main.c src/c64.c src/cpu6502.c src/snapshot.c src/gfx.c \
-         src/kbd.c src/diskio.c
+         src/kbd.c src/diskio.c src/shelf.c
+
+# C64 character ROM for the web build (never committed): FS2_CHARGEN, or
+# the first one found in a local VICE install.
+CHARGEN ?= $(firstword $(wildcard $(FS2_CHARGEN) \
+    /usr/local/share/vice/C64/chargen-901225-01.bin \
+    /opt/homebrew/share/vice/C64/chargen-901225-01.bin))
 
 .PHONY: all tools extract disasm vice-dump clean re fs2 fbtest web
 all: tools fs2
 
 fs2: $(BUILD)/fs2
 $(BUILD)/fs2: $(RT_SRC) src/c64.h src/cpu6502.h src/gfx.h src/kbd.h \
-              src/snapshot.h src/palette.h src/diskio.h | $(BUILD)
+              src/snapshot.h src/palette.h src/diskio.h src/shelf.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -o $@ $(RT_SRC) $(SDL_LIBS) \
 	    -framework OpenGL
 
@@ -46,11 +52,14 @@ $(BUILD)/fbtest: tools/fbtest.c src/c64.c src/cpu6502.c src/snapshot.c \
 web: | $(BUILD)
 	emcc -std=gnu90 -O2 $(RT_SRC) \
 	    -s USE_SDL=2 -s FULL_ES2=1 -s WASM=1 \
-	    -s ALLOW_MEMORY_GROWTH=1 \
+	    -s ALLOW_MEMORY_GROWTH=1 -lidbfs.js \
 	    --preload-file $(BUILD)/fs2-vice-mem.bin@fs2-snapshot.bin \
 	    --preload-file $(BUILD)/fs2-vice-mem.bin.ram@fs2-snapshot.bin.ram \
 	    --preload-file $(BUILD)/fs2-vice-mem.bin.regs@fs2-snapshot.bin.regs \
-	    --preload-file "$(GAME_D64)@fs2-disk.d64" \
+	    --preload-file $(DISKS)@/disks \
+	    --exclude-file "*.txt" --exclude-file "*.t64" \
+	    --exclude-file ".DS_Store" \
+	    $(if $(CHARGEN),--preload-file $(CHARGEN)@roms/chargen) \
 	    -o web/fs2.html
 	@echo "web build: web/fs2.html (serve web/ over http)"
 
