@@ -125,9 +125,9 @@ int main(int argc, char **argv)
             "never distributed with this repository.)\n");
         return 1;
     }
-    if (diskio_init(&machine, disk) != 0)
-        fprintf(stderr, "running without disk (loader will hang on "
-                        "disk access)\n");
+    diskio_init(&machine);
+    if (diskio_mount(disk, 0) != 0)
+        fprintf(stderr, "running with an empty drive\n");
     if (gfx_init("Flight Simulator II", 960, 720) != 0)
         return 1;
 

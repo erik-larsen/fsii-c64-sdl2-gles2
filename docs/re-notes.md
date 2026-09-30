@@ -72,6 +72,49 @@ U2 writes go to the in-memory image only.
 `$7A00-$7AFF` holds the four multicolor panel sprites (pointers
 `$E8-$EB` in VIC bank 1).
 
+## Keyboard and command dispatch
+
+- `$2574` scans one matrix column per call (double-read debounce);
+  `$2418` walks all 8 columns per pass, decoding through the 64-entry
+  table at `$2482` (index = column*8 + row).  New keys enter a 4-slot
+  rollover list `$089B-$089E` with a per-slot countdown `$0E71,X`
+  (auto-repeat), then a ring buffer `$08A9` (`$25DC` push, `$25C4`
+  pop).
+- CTRL decodes to `$FB` and latches `$0E67`; later keys get `-$40`
+  (CTRL-Z = `$1A`).  CTRL must be down a scan pass *before* the key.
+- `$27D8` pops a key and dispatches through a self-modified
+  `JMP ($0000)` into the 96-entry handler table at `$2718`
+  (default `$2CCD` = no-op).  **v1.0 differs from the reference card:**
+  CTRL-Z has no top-level handler, CTRL-X (`$2B0D`) cycles a radio
+  selector, CTRL-E (`$2F4C`) sets `$0E87` (disk database request).
+- While `$08BA` is set (editor/prompt), keys go to `$08C4` instead.
+
+## Editor overlay and mode library
+
+- `E` sets `$08BA`; main loop (`$204B`) calls the overlay entry `$A7E8`.
+  The editor code (track 10) loads to `$A7E0` and is paged to/from
+  `$D000-$E3FF` (RAM under I/O) by `$E6D8` (copy) / `$E6DB` (swap).
+- Pages: Simulation Control, Aircraft Position, Environmental Control.
+  Display is **text mode, VIC bank 0, screen `$0400`, charset `$1800`**
+  (`D018=$16`) — i.e. the C64 character ROM, not the game's own font.
+- Mode library disk I/O lives in the editor's key handler: CTRL-Z
+  (`$DA43`) = init, **format** (`N0:SUBLOGIC CORP.,FS`), write block `$40`
+  from the library at (`$0961`); CTRL-X (`$DA11`) = read block `$40` back.
+  Because it formats, the manual insists on a separate user disk.
+
+## Copy protection
+
+- Cold boot `$7848` reads sector 0 of tracks 1-9 and sums (actual -
+  expected) DOS error codes from the table at `$7836` into `$7326`.  The
+  on-disk table expects no errors (the game disk has none); after boot
+  the track-3 entry reads `$21`, so later checks require **21 READ ERROR
+  on track 3** — which every scenery/Star disk image records in its
+  error bytes (all of track 3 = `$03`).
+- `$E565` (called at `$207D` after scenery loads): if `$7326 != 0` and
+  `$5F`/`$22` bit 7 set, points NMI at an RTI and hangs forever.
+- Consequence for the port: honoring .d64 error bytes is required for
+  scenery disks to work.  diskio does; it never bypasses the check.
+
 ## Flight display: double-buffered raster split
 
 The `$2285` IRQ alternates two phases via `$4A`: phase B (raster 32,

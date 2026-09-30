@@ -30,15 +30,15 @@ all: tools fs2
 
 fs2: $(BUILD)/fs2
 $(BUILD)/fs2: $(RT_SRC) src/c64.h src/cpu6502.h src/gfx.h src/kbd.h \
-              src/snapshot.h src/palette.h | $(BUILD)
+              src/snapshot.h src/palette.h src/diskio.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -o $@ $(RT_SRC) $(SDL_LIBS) \
 	    -framework OpenGL
 
 fbtest: $(BUILD)/fbtest
 $(BUILD)/fbtest: tools/fbtest.c src/c64.c src/cpu6502.c src/snapshot.c \
-                 src/c64.h src/palette.h | $(BUILD)
+                 src/diskio.c src/c64.h src/diskio.h src/palette.h | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ tools/fbtest.c src/c64.c src/cpu6502.c \
-	    src/snapshot.c
+	    src/snapshot.c src/diskio.c
 
 # Emscripten web build.  The snapshot is preloaded from build/ into the
 # virtual FS; the resulting web/ output contains game data extracted
