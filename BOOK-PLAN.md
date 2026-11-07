@@ -61,7 +61,7 @@ Short annotated 6502 listings side by side with their C equivalents. Short and c
 ## Primary sources
 
 - Bruce Artwick, 1976 University of Illinois thesis on a computer-generated dynamic flight display
-- Bruce Artwick, *Applied Concepts in Microcomputer Graphics* (1984), likely documenting the techniques used, so designer intent can be checked against the disassembly
+- Bruce Artwick, *Applied Concepts in Microcomputer Graphics* (1984): describes the techniques generically and names Sublogic's A2-3D package; doesn't name FS II. Checklist in [notes/artwick-1984.md](notes/artwick-1984.md)
 - Sanglard, *Game Engine Black Book: Wolfenstein 3D* (2017) and *Doom* (2018), for structure and tone
 
 ## Next step
